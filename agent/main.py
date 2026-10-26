@@ -5,7 +5,8 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 from urllib.parse import quote
 
@@ -134,7 +135,10 @@ async def collect_comments() -> int:
         raise RuntimeError("Missing TELEGRAM_CHAT_ID secret")
 
     now = time.time()
-    cutoff = now - 24 * 60 * 60
+    local_now = datetime.now(ZoneInfo("Europe/Rome"))
+    yesterday_start = (local_now.date() - timedelta(days=1))
+    day_start = datetime.combine(yesterday_start, datetime.min.time(), tzinfo=ZoneInfo("Europe/Rome")).timestamp()
+    day_end = datetime.combine(local_now.date(), datetime.min.time(), tzinfo=ZoneInfo("Europe/Rome")).timestamp()
     count_sent = 0
     videos_scanned = 0
     ms_tokens = [TIKTOK_MS_TOKEN] if TIKTOK_MS_TOKEN else [None]
@@ -158,17 +162,16 @@ async def collect_comments() -> int:
             except (TypeError, ValueError):
                 video_created = None
 
-            # Profile feeds are newest-first in the normal case. Keep scanning a small
-            # safety margin, but only process videos published during the previous day.
+            # Profile feeds are normally newest-first. Select videos published on the
+            # previous calendar day in Europe/Rome, not simply the last rolling 24 hours.
             if video_created is None:
                 log(f"Skipping video with unknown publish time: {video_id or 'unknown ID'}")
                 continue
-            if video_created > now + 300:
-                log(f"Skipping video with future publish time: {video_id}")
+            if video_created >= day_end:
                 continue
-            if video_created < cutoff:
-                # Stop once the feed reaches older videos; newest-first ordering is expected.
-                log(f"Reached videos older than the last 24 hours; stopping discovery")
+            if video_created < day_start:
+                # Stop once the feed reaches videos older than yesterday; newest-first ordering is expected.
+                log("Reached videos older than yesterday (Europe/Rome); stopping discovery")
                 break
             if not video_id:
                 log("Skipping video without an ID")
@@ -182,7 +185,7 @@ async def collect_comments() -> int:
                     comment_id = str(getattr(comment, "id", "") or raw.get("cid", ""))
                     text = normalize_line(getattr(comment, "text", "") or raw.get("text", ""), 1200)
                     created = unix_comment_time(raw)
-                    if not comment_id or not text or created is None or created < cutoff or created > now + 300:
+                    if not comment_id or not text or created is None:
                         continue
                     if not is_suggestion(text):
                         continue
@@ -197,7 +200,7 @@ async def collect_comments() -> int:
             except Exception as exc:
                 log(f"Could not read comments for video {video_id}: {type(exc).__name__}: {exc}")
                 raise
-    log(f"Discovered and scanned {videos_scanned} video(s) from the last 24 hours; sent {count_sent} suggestion(s) to Telegram")
+    log(f"Discovered and scanned {videos_scanned} video(s) published yesterday in Europe/Rome; sent {count_sent} suggestion(s) to Telegram")
     return count_sent
 
 
