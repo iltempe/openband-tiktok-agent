@@ -13,7 +13,7 @@ The collector uses the unofficial `TikTok-Api` Python package. TikTok may block 
 - Uses a small, free keyword heuristic to identify possible feature requests.
 - Checks existing OpenBand issues for duplicates.
 - Sends proposals to a private Telegram chat. An issue is created only after an authorized Telegram approval.
-- Stores state in a JSON file committed to this repository so deduplication can persist between scheduled runs.
+- Checks GitHub issues for a source-comment marker before proposing or creating an issue, reducing duplicates.
 
 ### Repository setup
 
@@ -29,7 +29,7 @@ The collector uses the unofficial `TikTok-Api` Python package. TikTok may block 
 
 GitHub Actions scheduled jobs use UTC. The workflow runs a lightweight timezone check at 07:00 and 08:00 UTC and collects only when the local time in `Europe/Rome` is 09:00. This covers both daylight-saving and standard time. GitHub can delay scheduled starts, so this is not a guaranteed exact-time scheduler.
 
-A separate lightweight poll runs every 5 minutes to handle Telegram button callbacks without a permanently running server. This is a prototype trade-off: scheduled runs can be delayed, and repository/workflow limits apply. If this proves noisy, we can replace it with an approval command processed during a manual workflow run.
+A separate lightweight poll runs every 15 minutes to handle Telegram button callbacks without a permanently running server. This is a prototype trade-off: scheduled runs can be delayed, and repository/workflow limits apply. If this proves noisy, we can replace it with an approval command processed during a manual workflow run.
 
 ### Manual operation
 
@@ -44,7 +44,7 @@ Use **Run workflow** with:
 - Keep the Telegram bot in a private chat. The code checks the configured numeric Telegram user/chat ID before accepting a decision.
 - The target GitHub token should have access only to `iltempe/openband` and only the permissions needed to create issues.
 - Comment text is untrusted user input; the agent treats it as data, not instructions.
-- Public repositories expose code and committed state. The JSON state must contain no secrets or private profile data.
+- Public repositories expose code. Never store secrets or session cookies in repository files.
 
 ### Limits of the first version
 
