@@ -16,7 +16,7 @@ GITHUB_REPO = os.getenv("OPENBAND_REPO", "iltempe/openband")
 GITHUB_TOKEN = os.getenv("OPENBAND_GITHUB_TOKEN", "")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-TIKTOK_VIDEO_IDS = [x.strip() for x in os.getenv("TIKTOK_VIDEO_IDS", "").split(",") if x.strip()]
+TIKTOK_USERNAME = os.getenv("TIKTOK_USERNAME", "iltempe").strip().lstrip("@")
 TIKTOK_MS_TOKEN = os.getenv("TIKTOK_MS_TOKEN", "").strip() or None
 
 SUGGESTION_PATTERNS = [
@@ -128,14 +128,15 @@ def send_proposal(video_id: str, comment_id: str, author: str, text: str, create
 
 
 async def collect_comments() -> int:
-    if not TIKTOK_VIDEO_IDS:
-        raise RuntimeError("Set TIKTOK_VIDEO_IDS to comma-separated video IDs in repository Secrets")
+    if not TIKTOK_USERNAME:
+        raise RuntimeError("Set TIKTOK_USERNAME to the public TikTok username")
     if not TELEGRAM_CHAT_ID:
         raise RuntimeError("Missing TELEGRAM_CHAT_ID secret")
 
     now = time.time()
     cutoff = now - 24 * 60 * 60
     count_sent = 0
+    videos_scanned = 0
     ms_tokens = [TIKTOK_MS_TOKEN] if TIKTOK_MS_TOKEN else [None]
 
     async with TikTokApi() as api:
@@ -145,9 +146,36 @@ async def collect_comments() -> int:
             sleep_after=3,
             browser=os.getenv("TIKTOK_BROWSER", "chromium"),
         )
-        for video_id in TIKTOK_VIDEO_IDS:
-            log(f"Scanning configured video ID {video_id}")
-            video = api.video(id=video_id)
+        user = api.user(username=TIKTOK_USERNAME)
+        async for video in user.videos(count=30):
+            raw_video = getattr(video, "as_dict", {}) or {}
+            video_id = str(getattr(video, "id", "") or raw_video.get("id", ""))
+            created_raw = raw_video.get("createTime") or raw_video.get("create_time")
+            try:
+                video_created = float(created_raw)
+                if video_created > 10_000_000_000:
+                    video_created /= 1000
+            except (TypeError, ValueError):
+                video_created = None
+
+            # Profile feeds are newest-first in the normal case. Keep scanning a small
+            # safety margin, but only process videos published during the previous day.
+            if video_created is None:
+                log(f"Skipping video with unknown publish time: {video_id or 'unknown ID'}")
+                continue
+            if video_created > now + 300:
+                log(f"Skipping video with future publish time: {video_id}")
+                continue
+            if video_created < cutoff:
+                # Stop once the feed reaches older videos; newest-first ordering is expected.
+                log(f"Reached videos older than the last 24 hours; stopping discovery")
+                break
+            if not video_id:
+                log("Skipping video without an ID")
+                continue
+
+            videos_scanned += 1
+            log(f"Scanning yesterday/recent public video {video_id}")
             try:
                 async for comment in video.comments(count=100):
                     raw = getattr(comment, "as_dict", {}) or {}
@@ -169,7 +197,7 @@ async def collect_comments() -> int:
             except Exception as exc:
                 log(f"Could not read comments for video {video_id}: {type(exc).__name__}: {exc}")
                 raise
-    log(f"Sent {count_sent} suggestion(s) to Telegram")
+    log(f"Discovered and scanned {videos_scanned} video(s) from the last 24 hours; sent {count_sent} suggestion(s) to Telegram")
     return count_sent
 
 
