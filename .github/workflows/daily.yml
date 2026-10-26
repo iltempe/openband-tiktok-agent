@@ -71,6 +71,6 @@ jobs:
           OPENBAND_GITHUB_TOKEN: ${{ secrets.OPENBAND_GITHUB_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TIKTOK_VIDEO_IDS: ${{ secrets.TIKTOK_VIDEO_IDS }}
+          TIKTOK_USERNAME: iltempe
           TIKTOK_MS_TOKEN: ${{ secrets.TIKTOK_MS_TOKEN }}
         run: python -m agent.main
