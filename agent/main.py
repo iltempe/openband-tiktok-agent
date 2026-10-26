@@ -311,6 +311,17 @@ def main() -> int:
         else:
             raise ValueError("AGENT_MODE must be collect, poll, both, or skip")
         return 0
+    except KeyError as exc:
+        if exc.args == ("id",):
+            log(
+                "ERROR: TikTok did not return a usable public-profile response (missing 'id'). "
+                "This is a TikTokApi/profile-access failure, not a Telegram or GitHub token error. "
+                "The unofficial profile discovery cannot continue; do not retry repeatedly. "
+                "Use a supported TikTok API integration if available, or choose another source for video discovery."
+            )
+        else:
+            log(f"ERROR: KeyError: {exc}")
+        return 1
     except Exception as exc:
         log(f"ERROR: {type(exc).__name__}: {exc}")
         return 1
