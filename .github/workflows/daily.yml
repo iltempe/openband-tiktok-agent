@@ -1,0 +1,74 @@
+name: OpenBand TikTok feedback agent
+
+on:
+  schedule:
+    # Check at 07:00 and 08:00 UTC; collect only when it is 09:00 in Europe/Rome.
+    - cron: "0 7,8 * * *"
+    # Process Telegram approval buttons every five minutes.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Action to run"
+        required: true
+        type: choice
+        options:
+          - collect
+          - poll
+          - both
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openband-tiktok-feedback-agent
+  cancel-in-progress: false
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Decide whether this scheduled run should collect or poll
+        id: mode
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.schedule }}" == "*/5 * * * *" ]]; then
+            echo "value=poll" >> "$GITHUB_OUTPUT"
+          elif [[ "$(TZ=Europe/Rome date +%H)" == "09" ]]; then
+            echo "value=collect" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=skip" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Skip timezone-check run
+        if: steps.mode.outputs.value == 'skip'
+        run: echo "Not 09:00 in Europe/Rome; no collection needed."
+      - name: Checkout repository
+        if: steps.mode.outputs.value != 'skip'
+        uses: actions/checkout@v4
+      - name: Set up Python
+        if: steps.mode.outputs.value != 'skip'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        if: steps.mode.outputs.value != 'skip'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Run agent
+        if: steps.mode.outputs.value != 'skip'
+        env:
+          AGENT_MODE: ${{ steps.mode.outputs.value }}
+          OPENBAND_REPO: iltempe/openband
+          OPENBAND_GITHUB_TOKEN: ${{ secrets.OPENBAND_GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TIKTOK_VIDEO_IDS: ${{ secrets.TIKTOK_VIDEO_IDS }}
+          TIKTOK_MS_TOKEN: ${{ secrets.TIKTOK_MS_TOKEN }}
+        run: python -m agent.main
