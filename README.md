@@ -9,7 +9,7 @@ The collector uses the unofficial `TikTok-Api` Python package. TikTok may block 
 ### What it does
 
 - Runs from GitHub Actions; no always-on server.
-- Reads comments for explicitly configured video IDs (automatic discovery of every profile video is not implemented yet).
+- Discovers recent public videos automatically from the configured TikTok username and scans their comments.
 - Uses a small, free keyword heuristic to identify possible feature requests.
 - Checks existing OpenBand issues for duplicates.
 - Sends proposals to a private Telegram chat. An issue is created only after an authorized Telegram approval.
@@ -19,7 +19,7 @@ The collector uses the unofficial `TikTok-Api` Python package. TikTok may block 
 
 1. Create a Telegram bot with `@BotFather`, open a private chat with it, and send `/start`.
 2. Create a fine-grained GitHub personal access token restricted to `iltempe/openband`, with **Issues: Read and write** and **Metadata: Read-only**. Store it as `OPENBAND_GITHUB_TOKEN` in this repository's **Settings → Secrets and variables → Actions**.
-3. Add Actions secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `TIKTOK_VIDEO_IDS` (comma-separated numeric IDs of your own public videos).
+3. Add Actions secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. The workflow currently scans the public profile `@iltempe`; change `TIKTOK_USERNAME` in `.github/workflows/daily.yml` if your username differs. No per-video IDs are needed.
 4. `TIKTOK_MS_TOKEN` is optional. It is a sensitive session cookie; do not paste it into chat or commit it. Start without it. If you choose to use it, add it only as a secret and revoke it if exposed.
 5. Create the `community-feedback` label in `iltempe/openband`.
 6. Open **Actions → OpenBand TikTok feedback agent → Run workflow** and choose `collect` for the first diagnostic run.
@@ -48,7 +48,7 @@ Use **Run workflow** with:
 
 ### Limits of the first version
 
-- Only video IDs supplied in `TIKTOK_VIDEO_IDS` are checked.
+- Automatic discovery depends on TikTokApi being able to read the public profile feed; TikTok may change or block this unofficial interface.
 - Classification is heuristic, not an LLM; expect false positives and missed suggestions.
 - TikTok scraping reliability is not guaranteed.
 - No live end-to-end run has been verified yet.
